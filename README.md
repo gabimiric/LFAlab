@@ -1,4 +1,4 @@
-# Finite Automata
+# Lexer
 
 ### Course: Formal Languages & Finite Automata
 ### Author: Miricinschi Gabriel, FAF-233
@@ -7,91 +7,66 @@
 
 ## Theory
 
-A finite automaton is a computational model used to represent various processes, ranging from simple control systems to complex pattern recognition mechanisms. It operates similarly to a state machine, as both are structured around states and transitions that define how a system moves from one configuration to another based on inputs. The term finite highlights that the automaton consists of a limited number of states, including a well-defined starting state and one or more final states, which signify valid completion points of a given process. In essence, an automaton models a system with a clear beginning and end, making it a useful abstraction in computing, linguistics, and engineering.
+A lexer (short for lexical analyzer) is a fundamental component of a compiler or interpreter responsible for breaking down input text into meaningful units called tokens. It is the first phase of a language processing pipeline, converting a raw sequence of characters into structured elements that a parser can work with. Lexers are commonly used in programming languages, scripting engines, and even command-line interpreters to understand user input.
 
-Within the structure of an automaton, there are scenarios where a single transition can lead to multiple possible states, introducing non-determinism into the system. In the broader context of systems theory, the concept of determinism refers to the predictability of a system’s behavior—if a system always produces the same outcome given a specific input, it is deterministic; otherwise, if randomness or multiple outcomes are possible, it becomes stochastic or non-deterministic.
+Lexical analysis involves scanning an input string and categorizing substrings based on predefined rules. These rules define the syntax of tokens, such as keywords, identifiers, numbers, operators, and punctuation. For example, in a programming language, int x = 10; would be broken into tokens like "int" (keyword), "x" (identifier), "=" (operator), and "10" (integer). Regular expressions and finite automata are often used to define and implement these tokenization rules efficiently.
 
-Because of this distinction, finite automata can be categorized as either deterministic or non-deterministic. Despite the presence of non-determinism in some automata, there exist well-defined algorithms that allow the transformation of a non-deterministic finite automaton (NFA) into an equivalent deterministic finite automaton (DFA). This conversion process ensures that for every input symbol, there is a single, unique transition from each state, making the system fully predictable and structured. This ability to refine and restructure automata plays a crucial role in theoretical computer science, formal language processing, and the design of efficient computational models.
+A well-designed lexer must handle whitespace, comments, and errors gracefully. Whitespace and comments are typically ignored unless they are significant in the language (e.g., indentation in Python). Error handling ensures that invalid sequences, such as an unexpected character in a number, are flagged early in the processing pipeline. In some cases, lexers support lookahead, where they peek at upcoming characters to determine token boundaries more accurately.
+
+Lexers can be implemented in various ways, including handwritten code using conditional statements or lexer generators like Lex, Flex, or ANTLR, which automate the process based on a formal grammar. A state machine approach is also common, where different states represent different token types, and transitions occur based on character input. The choice of implementation depends on factors like performance, maintainability, and language complexity.
 
 ## Objectives:
 
-1. Understand what an automaton is and what it can be used for.
-
-2. Continuing the work in the same repository and the same project, the following need to be added:
-    a. Provide a function in your grammar type/class that could classify the grammar based on Chomsky hierarchy.
-
-    b. For this you can use the variant from the previous lab.
-
-3. According to your variant number (by universal convention it is register ID), get the finite automaton definition and do the following tasks:
-
-    a. Implement conversion of a finite automaton to a regular grammar.
-
-    b. Determine whether your FA is deterministic or non-deterministic.
-
-    c. Implement some functionality that would convert an NDFA to a DFA.
+1. Understand what lexical analysis [1] is.
+   
+3. Get familiar with the inner workings of a lexer/scanner/tokenizer.
+   
+5. Implement a sample lexer and show how it works. 
     
 
 ## Implementation description
-
-This part in the Grammar class converts a grammar into a finite automaton (FA) by mapping each non-terminal to a unique state and defining transitions based on the production rules. It iterates through the rules, assigning states to non-terminals if they haven't been mapped yet. For each production, if the rule contains both a terminal and a non-terminal (X → aY), it ensures the next non-terminal has a corresponding state and sets up a transition. If the production consists of only a terminal (X → a), the current state's transition leads to itself, and the FA marks it as a final state. This ensures that the FA properly recognizes strings generated by the grammar. Once all transitions are processed, the function returns the constructed FA.
-
+The following part of my lexer defines regular expressions to identify different types of tokens in a command-line input. The patterns array consists of three regex patterns: R"(^/\w+)" matches a command that starts with / (e.g., /roll), R"(\b\w+\b)" captures general words as arguments (e.g., Alice, STR), and R"(\b\d+\b)" detects numeric values (e.g., 20, 18). The types array assigns corresponding TokenType values (COMMAND, ARG, NUMBER) to each pattern, ensuring that when the lexer scans input, it can categorize tokens correctly. This structure enables efficient tokenization of user commands, allowing the parser to interpret them based on their roles in the syntax.
 ```c++
-    // For each non-terminal, create a state and handle transitions
-    for (auto& rule : rules) {
-        char nonTerminal = rule.first;
-        if (stateMapping.find(nonTerminal) == stateMapping.end()) {
-            stateMapping[nonTerminal] = "q" + to_string(stateCount++);
-        }
-
-        for (const string& production : rule.second) {
-            char symbol = production[0];  // Terminal symbol
-            string nextState;
-
-            if (production.size() == 2) {  // Non-terminal transition (i.e., second character)
-                char nextNonTerminal = production[1];
-                if (stateMapping.find(nextNonTerminal) == stateMapping.end()) {
-                    stateMapping[nextNonTerminal] = "q" + to_string(stateCount++);
-                }
-                nextState = stateMapping[nextNonTerminal];
-            } else {  // Terminal transition
-                nextState = stateMapping[nonTerminal];
-                fa.finalStates.insert(nextState);  // This should be marked as final for terminal symbols
-            }
+regex patterns[] = {regex(R"(^/\w+)"), regex(R"(\b\w+\b)"), regex(R"(\b\d+\b)")};
+TokenType types[] = {TokenType::COMMAND, TokenType::ARG, TokenType::NUMBER};
 ```
-This code is part of the FiniteAutomaton class and contributes to a function that converts a non-deterministic finite automaton (NFA) into a deterministic finite automaton (DFA). The function iterates over all symbols in the alphabet and computes the transitions for each state in the DFA. It does this by checking which states in the NFA can be reached from the current set of states and grouping them into a new DFA state. The new state is represented by concatenating the names of the NFA states it includes. If the newly formed state hasn't been processed yet, it's added to the queue for further processing. The function ensures that every transition in the DFA leads to a unique state, eliminating non-determinism. Additionally, a separate function in the class checks whether the FA is deterministic, allowing verification before conversion. Once all states and transitions are processed, the function returns a new FA object that represents the equivalent DFA.
-
+This code snippet processes an input string by iterating through each character and attempting to match predefined patterns using regular expressions. The loop begins by setting pos to 0, which indicates the starting position in the input string. It then enters a while loop that continues as long as pos is less than the input string size. Inside the loop, the for loop tries to match each of the three regex patterns defined earlier (e.g., for commands, arguments, and numbers). If a match is found, the corresponding token is created and added to the tokens vector, along with its associated type from the types array. The position pos is then updated to skip over the matched part of the input. If no match is found, the code increments pos by 1 to skip the current character and continue searching for valid tokens. This ensures that every character is processed, and any unrecognized characters are ignored.
 ```c++
-        // For each symbol in the alphabet, compute transitions
-        for (char symbol : alphabet) {
-            set<string> newStateSet;
-            for (const string& s : currentSet) {
-                if (transitions.count({s, symbol})) {
-                    newStateSet.insert(transitions[{s, symbol}].begin(), transitions[{s, symbol}].end());
+size_t pos = 0;
+        while (pos < input.size()) // Iterate over the input string
+        {
+            bool matched = false;
+            for (int i = 0; i < 3; i++) // Try to match each pattern
+            {
+                smatch match;
+                if (regex_search(input.begin() + pos, input.end(), match, patterns[i])) // If a match is found
+                {
+                    tokens.push_back({types[i], match.str()}); // Create token and add to vector
+                    pos += match.position() + match.length(); // Move position to the end of the matched part
+                    matched = true;
+                    break;
                 }
             }
-
-            if (!newStateSet.empty()) {
-                // Create new state name by concatenating NFA states in the set
-                string newStateName = "";
-                for (const string& s : newStateSet) {
-                    newStateName += s;  // Concatenate each string from the set
-                }
-
-                // Add transition in DFA from current state to new state
-                dfa.transitions[{stateName, symbol}].insert(newStateName);
-
-                // If this new state hasn't been processed, enqueue it
-                if (!processedStates.count(newStateName)) {
-                    newStates.push(newStateSet);
-                    stateMapping[newStateName] = newStateSet;
-                }
+            if (!matched) pos++; // Skip unknown characters
+        }
+```
+This snippet handles the /roll command by determining the number of sides on the dice and rolling it accordingly. By default, it assumes a six-sided die (d6). If the user provides a specific die type (e.g., /roll d20), the lexer checks if the second token exists and starts with 'd'. If so, it extracts the number after 'd' using substr(1) and converts it to an integer with stoi(). Finally, it calls rollDice(sides), which simulates rolling a die with the specified number of sides, and prints the result. This ensures flexibility while maintaining a default behavior if no die type is specified.
+```c++
+if (command == "/roll")
+        {
+            int sides = 6; // Default dice is d6
+            if (tokens.size() > 1 && tokens[1].value[0] == 'd') // Check if a specific dice is mentioned (e.g., d20)
+            {
+                sides = stoi(tokens[1].value.substr(1)); // Extract the number of sides (e.g., 20 from d20)
             }
+            cout << "Dice rolled: " << rollDice(sides) << "\n"; // Output the result of the dice roll
+        }
 ```
 ## Conclusions
-In this lab, I enhanced the Grammar class to define formal grammars using production rules and integrated functionality to convert the grammar into a Finite Automaton (FA). Additionally, I implemented methods in the FiniteAutomaton class to check for determinism and convert an NFA to a DFA. This work deepened my understanding of formal languages, grammars, and finite automata, particularly in their application for language generation, validation, and automaton conversions. The tasks reinforced how these theoretical concepts are connected and provided practical experience in working with them through programming.
+In this lab, I developed a lexer to tokenize command-line input for a DnD campaign system. I implemented regular expressions to identify commands, arguments, and numbers, ensuring accurate parsing of user input. The lexer processes input efficiently by iterating through characters and matching predefined token patterns. Additionally, I handled specific commands like /roll by extracting relevant arguments and executing the appropriate actions. This lab strengthened my understanding of lexical analysis and its role in command processing, reinforcing key concepts in text parsing, tokenization, and structured input interpretation.
 
 ### Output
 
-![Results](https://github.com/user-attachments/assets/92134b18-87a9-448f-88c1-e98c6557d2d8)
+![Results](https://github.com/user-attachments/assets/d6141b75-02b5-40a3-a5be-4d899a4bd6c3)
 
 Results after running the code.
