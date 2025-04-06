@@ -1,94 +1,134 @@
-# Finite Automata
+# Regular Grammar
 
 ### Course: Formal Languages & Finite Automata
+
 ### Author: Miricinschi Gabriel, FAF-233
 
 ----
 
 ## Theory
 
-A finite automaton is a computational model used to represent various processes, ranging from simple control systems to complex pattern recognition mechanisms. It operates similarly to a state machine, as both are structured around states and transitions that define how a system moves from one configuration to another based on inputs. The term finite highlights that the automaton consists of a limited number of states, including a well-defined starting state and one or more final states, which signify valid completion points of a given process. In essence, an automaton models a system with a clear beginning and end, making it a useful abstraction in computing, linguistics, and engineering.
+A regular grammar consists of a set of production rules used to generate strings within a language. These rules are of
+two main types: right-linear and left-linear. In right-linear grammar, a production rule follows the format A → aB or
+A → a, where A and B are non-terminal symbols, and a is a terminal symbol. In left-linear grammar, the production rule
+is of the form A → Ba or A → a. Regular grammars only allow the non-terminal to appear at the end (right-linear) or at
+the start (left-linear) of the string, ensuring the grammar generates simple, predictable patterns.
 
-Within the structure of an automaton, there are scenarios where a single transition can lead to multiple possible states, introducing non-determinism into the system. In the broader context of systems theory, the concept of determinism refers to the predictability of a system’s behavior—if a system always produces the same outcome given a specific input, it is deterministic; otherwise, if randomness or multiple outcomes are possible, it becomes stochastic or non-deterministic.
+The right-linear grammar is the more commonly used form because it directly translates to regular expressions and finite
+automata, which are widely used in practical applications such as text processing and lexical analysis. In right-linear
+grammar, non-terminal symbols are always followed by terminal symbols or the empty string. This structure makes regular
+grammars less complex than context-free grammars, which allow more varied arrangements of non-terminals.
 
-Because of this distinction, finite automata can be categorized as either deterministic or non-deterministic. Despite the presence of non-determinism in some automata, there exist well-defined algorithms that allow the transformation of a non-deterministic finite automaton (NFA) into an equivalent deterministic finite automaton (DFA). This conversion process ensures that for every input symbol, there is a single, unique transition from each state, making the system fully predictable and structured. This ability to refine and restructure automata plays a crucial role in theoretical computer science, formal language processing, and the design of efficient computational models.
+A regular grammar is context-free in the sense that it doesn't rely on the context of surrounding symbols, allowing for
+simpler parsing. It can only generate patterns that consist of a limited number of operations, such as alternation (
+using the pipe symbol |), repetition (using * or +), and optionality (using ?). This makes regular grammars suitable for
+describing simpler syntactic structures in many applications like pattern matching or constructing basic compilers.
 
 ## Objectives:
 
-1. Understand what an automaton is and what it can be used for.
+1. Write and cover what regular expressions are, what they are used for;
 
-2. Continuing the work in the same repository and the same project, the following need to be added:
-    a. Provide a function in your grammar type/class that could classify the grammar based on Chomsky hierarchy.
+2. Take a variant depending on your number in the list of students and do the following:
 
-    b. For this you can use the variant from the previous lab.
+   a. Write a code that will generate valid combinations of symbols conform given regular expressions (examples will be
+   shown). Be careful that idea is to interpret the given regular expressions dinamycally, not to hardcode the way it
+   will
+   generate valid strings. You give a set of regexes as input and get valid word as an output
 
-3. According to your variant number (by universal convention it is register ID), get the finite automaton definition and do the following tasks:
+   b. In case you have an example, where symbol may be written undefined number of times, take a limit of 5 times (to
+   evade
+   generation of extremely long combinations);
 
-    a. Implement conversion of a finite automaton to a regular grammar.
-
-    b. Determine whether your FA is deterministic or non-deterministic.
-
-    c. Implement some functionality that would convert an NDFA to a DFA.
-    
+   c. Bonus point: write a function that will show sequence of processing regular expression (like, what you do first,
+   second and so on)
 
 ## Implementation description
 
-This part in the Grammar class converts a grammar into a finite automaton (FA) by mapping each non-terminal to a unique state and defining transitions based on the production rules. It iterates through the rules, assigning states to non-terminals if they haven't been mapped yet. For each production, if the rule contains both a terminal and a non-terminal (X → aY), it ensures the next non-terminal has a corresponding state and sets up a transition. If the production consists of only a terminal (X → a), the current state's transition leads to itself, and the FA marks it as a final state. This ensures that the FA properly recognizes strings generated by the grammar. Once all transitions are processed, the function returns the constructed FA.
+This part of the code generates a string based on the regular expression (a|b)(c|d)E+G?. It first randomly selects
+either "a" or "b" for the (a|b) part, and then randomly selects either "c" or "d" for the (c|d) part. Next, it ensures
+that the letter "E" appears at least once due to the E+ part, and it may add additional "E"s up to a maximum number
+defined by MAX_REPETITIONS. Finally, it randomly decides whether to append the letter "G" (due to the G? part, where "G"
+is optional) with a 50% chance. The resulting string will follow this pattern, but with the optional repetition of "E"s
+and "G".
 
 ```c++
-    // For each non-terminal, create a state and handle transitions
-    for (auto& rule : rules) {
-        char nonTerminal = rule.first;
-        if (stateMapping.find(nonTerminal) == stateMapping.end()) {
-            stateMapping[nonTerminal] = "q" + to_string(stateCount++);
+     // Handle specific parts of the regex
+    if (pattern == "(a|b)(c|d)E+G?")
+    {
+        // First part (a|b)
+        result += getRandomChoice({"a", "b"});
+        // Second part (c|d)
+        result += getRandomChoice({"c", "d"});
+        // E+ (E at least once, so we add one 'E' and can add more)
+        result += "E"; // E must be present
+        for (int i = 0; i < rand() % MAX_REPETITIONS; ++i)
+        {
+            // Add 0-MAX_REPETITIONS more Es
+            result += "E";
         }
-
-        for (const string& production : rule.second) {
-            char symbol = production[0];  // Terminal symbol
-            string nextState;
-
-            if (production.size() == 2) {  // Non-terminal transition (i.e., second character)
-                char nextNonTerminal = production[1];
-                if (stateMapping.find(nextNonTerminal) == stateMapping.end()) {
-                    stateMapping[nextNonTerminal] = "q" + to_string(stateCount++);
-                }
-                nextState = stateMapping[nextNonTerminal];
-            } else {  // Terminal transition
-                nextState = stateMapping[nonTerminal];
-                fa.finalStates.insert(nextState);  // This should be marked as final for terminal symbols
-            }
+        // G? (G is optional, can appear 0 or 1 time)
+        if (rand() % 2)
+        {
+            result += "G";
+        }
+    }
 ```
-This code is part of the FiniteAutomaton class and contributes to a function that converts a non-deterministic finite automaton (NFA) into a deterministic finite automaton (DFA). The function iterates over all symbols in the alphabet and computes the transitions for each state in the DFA. It does this by checking which states in the NFA can be reached from the current set of states and grouping them into a new DFA state. The new state is represented by concatenating the names of the NFA states it includes. If the newly formed state hasn't been processed yet, it's added to the queue for further processing. The function ensures that every transition in the DFA leads to a unique state, eliminating non-determinism. Additionally, a separate function in the class checks whether the FA is deterministic, allowing verification before conversion. Once all states and transitions are processed, the function returns a new FA object that represents the equivalent DFA.
+
+This is the main part of the code that is responsible for generating and displaying strings based on multiple regular
+expressions. It first seeds the random number generator using srand(time(0)), ensuring that the random numbers are
+different each time the program runs. Then, a list of regular expressions (regexPatterns) is defined, containing three
+patterns: (a|b)(c|d)E+G?, P(Q|R|S)T(UV|W|X)*Z+, and 1(0/1)*2(3/4)^5 36. The code then loops through each of these
+patterns, printing a message indicating the current pattern being processed (cout << "Building string for pattern: " <<
+pattern << endl;), and calls the buildStringFromRegex function to generate and display the corresponding string based on
+the pattern. Each pattern will be processed and a string will be built and displayed according to the rules of the
+respective regular expression.
 
 ```c++
-        // For each symbol in the alphabet, compute transitions
-        for (char symbol : alphabet) {
-            set<string> newStateSet;
-            for (const string& s : currentSet) {
-                if (transitions.count({s, symbol})) {
-                    newStateSet.insert(transitions[{s, symbol}].begin(), transitions[{s, symbol}].end());
-                }
-            }
+    srand(time(0)); // Seed for random generation
 
-            if (!newStateSet.empty()) {
-                // Create new state name by concatenating NFA states in the set
-                string newStateName = "";
-                for (const string& s : newStateSet) {
-                    newStateName += s;  // Concatenate each string from the set
-                }
+    // Regular expressions as input
+    vector<string> regexPatterns = {
+        "(a|b)(c|d)E+G?",
+        "P(Q|R|S)T(UV|W|X)*Z+",
+        "1(0/1)*2(3/4)^5 36"
+    };
 
-                // Add transition in DFA from current state to new state
-                dfa.transitions[{stateName, symbol}].insert(newStateName);
-
-                // If this new state hasn't been processed, enqueue it
-                if (!processedStates.count(newStateName)) {
-                    newStates.push(newStateSet);
-                    stateMapping[newStateName] = newStateSet;
-                }
-            }
+    // Process each pattern dynamically
+    for (const string &pattern: regexPatterns)
+    {
+        cout << "Building string for pattern: " << pattern << endl;
+        buildStringFromRegex(pattern);
 ```
+
+This part of the code displays each of the 5 generated strings one character at a time, with a delay between each
+character to simulate real-time construction. It iterates over the results vector, which contains the generated strings,
+and for each string, it loops through each character in the string (res[i]). For each character, it prints the character
+to the console and then pauses the program for a specified amount of time (SLEEP milliseconds, which is typically set to
+100ms). After displaying all the characters of a string, it moves to the next line (cout << endl) to display the next
+string. This creates the effect of the string being built character by character with a delay between each character.
+
+```c++
+// Display the results with a delay between each string for real-time construction
+    for (const auto &res: results)
+    {
+        for (size_t i = 0; i < res.length(); ++i)
+        {
+            cout << res[i];
+            this_thread::sleep_for(chrono::milliseconds(SLEEP)); // Delay of 100ms between characters
+        }
+        cout << endl;
+    }
+```
+
 ## Conclusions
-In this lab, I enhanced the Grammar class to define formal grammars using production rules and integrated functionality to convert the grammar into a Finite Automaton (FA). Additionally, I implemented methods in the FiniteAutomaton class to check for determinism and convert an NFA to a DFA. This work deepened my understanding of formal languages, grammars, and finite automata, particularly in their application for language generation, validation, and automaton conversions. The tasks reinforced how these theoretical concepts are connected and provided practical experience in working with them through programming.
+
+In this lab, I focused on working with regular grammar to define formal languages using production rules. I implemented
+functionality to dynamically generate valid strings based on given regular expressions. The task involved parsing
+patterns, handling different operations such as alternation, repetition, and optionality, and then generating random
+strings that conform to those patterns. By handling infinite repetitions and ensuring random choices in the generation
+process, I gained a deeper understanding of how regular grammars work and how they can be applied to generate strings
+that match specific patterns in a flexible and efficient manner. This lab enhanced my knowledge of regular expressions
+and regular grammar's role in language generation.
 
 ### Output
 
