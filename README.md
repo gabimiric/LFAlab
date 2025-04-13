@@ -118,6 +118,7 @@ In this lab, I focused on working with regular grammar to define formal language
 
 ### Output
 
-![Results](https://github.com/user-attachments/assets/92134b18-87a9-448f-88c1-e98c6557d2d8)
+![Results](https://github.com/user-attachments/assets/bd11d84f-2245-4dfc-b040-fbc269151b5b)
+
 
 Results after running the code.
