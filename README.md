@@ -31,7 +31,7 @@ describing simpler syntactic structures in many applications like pattern matchi
 2. Take a variant depending on your number in the list of students and do the following:
 
    a. Write a code that will generate valid combinations of symbols conform given regular expressions (examples will be
-   shown). Be careful that idea is to interpret the given regular expressions dinamycally, not to hardcode the way it
+   shown). Be careful that idea is to interpret the given regular expressions dynamically, not to hardcode the way it
    will
    generate valid strings. You give a set of regexes as input and get valid word as an output
 
@@ -44,91 +44,77 @@ describing simpler syntactic structures in many applications like pattern matchi
 
 ## Implementation description
 
-This part of the code generates a string based on the regular expression (a|b)(c|d)E+G?. It first randomly selects
-either "a" or "b" for the (a|b) part, and then randomly selects either "c" or "d" for the (c|d) part. Next, it ensures
-that the letter "E" appears at least once due to the E+ part, and it may add additional "E"s up to a maximum number
-defined by MAX_REPETITIONS. Finally, it randomly decides whether to append the letter "G" (due to the G? part, where "G"
-is optional) with a 50% chance. The resulting string will follow this pattern, but with the optional repetition of "E"s
-and "G".
+This part of the generateFromRegex function handles the custom repetition operator ```^```, allowing either random or fixed
+repetitions of the previous token. If followed by ```*```, it repeats lastToken a random number of times up to
+MAX_REPETITIONS. If followed by digits (e.g., ```^5```), it repeats the token exactly that number of times, adding ```count - 1```
+copies since one instance already exists. This is just a small segment of the full generateFromRegex logic, which parses
+and builds a string based on the full regex-like pattern.
 
 ```c++
-     // Handle specific parts of the regex
-    if (pattern == "(a|b)(c|d)E+G?")
-    {
-        // First part (a|b)
-        result += getRandomChoice({"a", "b"});
-        // Second part (c|d)
-        result += getRandomChoice({"c", "d"});
-        // E+ (E at least once, so we add one 'E' and can add more)
-        result += "E"; // E must be present
-        for (int i = 0; i < rand() % MAX_REPETITIONS; ++i)
-        {
-            // Add 0-MAX_REPETITIONS more Es
-            result += "E";
+        else if (c == '^') {
+            ++i;
+            if (i < pattern.size() && pattern[i] == '*') {
+                ++i;
+                int reps = rand() % MAX_REPETITIONS;
+                for (int j = 0; j < reps; ++j) result += lastToken;
+            } else {
+                int count = 0;
+                while (i < pattern.size() && isdigit(pattern[i])) {
+                    count = count * 10 + (pattern[i] - '0');
+                    ++i;
+                }
+                for (int j = 1; j < count; ++j) result += lastToken; // ^N includes 1 original + N-1 more
+            }
         }
-        // G? (G is optional, can appear 0 or 1 time)
-        if (rand() % 2)
-        {
-            result += "G";
+```
+
+This section of parseGroup handles the parsing of group expressions enclosed in parentheses, such as ```(a|b|c)```. It first
+skips the opening parenthesis, then iterates through the characters until it finds the closing one. Inside the loop, it
+collects characters into a current option, splitting them at each ```|```, and recursively processes nested groups if
+another ```(``` is encountered. Once the closing ```)``` is found, it adds the final option and returns a randomly selected one from
+the collected list.
+
+```c++
+    ++i; // Skip '('
+    while (i < pattern.size() && pattern[i] != ')') {
+        if (pattern[i] == '|') {
+            options.push_back(current);
+            current.clear();
+            ++i;
+        } else if (pattern[i] == '(') {
+            current += parseGroup(pattern, i); // Nested group
+        } else {
+            current += pattern[i++];
         }
+    }
+    ++i; // Skip ')'
+    options.push_back(current); // Add last option buildFromPattern(pattern);
     }
 ```
 
-This is the main part of the code that is responsible for generating and displaying strings based on multiple regular
-expressions. It first seeds the random number generator using srand(time(0)), ensuring that the random numbers are
-different each time the program runs. Then, a list of regular expressions (regexPatterns) is defined, containing three
-patterns: (a|b)(c|d)E+G?, P(Q|R|S)T(UV|W|X)*Z+, and 1(0/1)*2(3/4)^5 36. The code then loops through each of these
-patterns, printing a message indicating the current pattern being processed (cout << "Building string for pattern: " <<
-pattern << endl;), and calls the buildStringFromRegex function to generate and display the corresponding string based on
-the pattern. Each pattern will be processed and a string will be built and displayed according to the rules of the
-respective regular expression.
+This part in main initializes a list of regex-like patterns and generates example strings from each. It stores several
+pattern strings in the regexPatterns vector, demonstrating different features like alternation ```(a|b)```, repetition ```*```, ```+```,
+optional elements ```?```, and custom repetition using ```^```. For each pattern, it prints a heading and calls buildFromPattern,
+which generates and displays five randomized strings based on that pattern. This serves as a testbed to visually confirm
+the pattern parser and generator work correctly.
 
 ```c++
-    srand(time(0)); // Seed for random generation
-
-    // Regular expressions as input
     vector<string> regexPatterns = {
         "(a|b)(c|d)E+G?",
         "P(Q|R|S)T(UV|W|X)*Z+",
-        "1(0/1)*2(3/4)^5 36"
+        "1(0|1)*2(3|4)^5 36",
+        // "(Ha|He|Ho)^* (wo|wa)^3 !+(x|y|z)?"
     };
 
-    // Process each pattern dynamically
-    for (const string &pattern: regexPatterns)
-    {
-        cout << "Building string for pattern: " << pattern << endl;
-        buildStringFromRegex(pattern);
-```
-
-This part of the code displays each of the 5 generated strings one character at a time, with a delay between each
-character to simulate real-time construction. It iterates over the results vector, which contains the generated strings,
-and for each string, it loops through each character in the string (res[i]). For each character, it prints the character
-to the console and then pauses the program for a specified amount of time (SLEEP milliseconds, which is typically set to
-100ms). After displaying all the characters of a string, it moves to the next line (cout << endl) to display the next
-string. This creates the effect of the string being built character by character with a delay between each character.
-
-```c++
-// Display the results with a delay between each string for real-time construction
-    for (const auto &res: results)
-    {
-        for (size_t i = 0; i < res.length(); ++i)
-        {
-            cout << res[i];
-            this_thread::sleep_for(chrono::milliseconds(SLEEP)); // Delay of 100ms between characters
-        }
-        cout << endl;
+    for (const string &pattern : regexPatterns) {
+        cout << "Generated strings for: " << pattern << endl;
+        buildFromPattern(pattern);
     }
 ```
 
 ## Conclusions
 
-In this lab, I focused on working with regular grammar to define formal languages using production rules. I implemented
-functionality to dynamically generate valid strings based on given regular expressions. The task involved parsing
-patterns, handling different operations such as alternation, repetition, and optionality, and then generating random
-strings that conform to those patterns. By handling infinite repetitions and ensuring random choices in the generation
-process, I gained a deeper understanding of how regular grammars work and how they can be applied to generate strings
-that match specific patterns in a flexible and efficient manner. This lab enhanced my knowledge of regular expressions
-and regular grammar's role in language generation.
+In this lab, I focused on working with regular grammar to define formal languages using production rules and implemented a parser to interpret and process simplified regular expressions. I developed functionality to dynamically generate valid strings based on given patterns by parsing them and handling operations such as alternation, repetition, optionality, and custom repetition counts. The parser played a key role in breaking down complex expressions, managing nested groups, and applying randomization to reflect the flexible nature of regular grammars. Through building this parser and string generator, I gained a deeper understanding of how regular grammars operate and how they can be effectively used for language generation.
 
 ### Output
 

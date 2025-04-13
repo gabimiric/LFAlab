@@ -1,134 +1,118 @@
 #include <iostream>
+#include <string>
 #include <vector>
-#include <regex>
 #include <cstdlib>
 #include <ctime>
 #include <thread>
-#include <sstream>
 
 using namespace std;
 
-// Max repetitions and sleep timer
-const int MAX_REPETITIONS = 10;
-const int SLEEP = 200;
+const int SLEEP = 300;                // Delay between characters
+const int MAX_REPETITIONS = 10;      // Max repeats for *, +, and ^*
+const int N_STRINGS = 3;            // Number of strings to be generated for each pattern
 
-// Function to generate a random element from a given set of options
-string getRandomChoice(const vector<string> &choices)
-{
-    return choices[rand() % choices.size()];
+string generateFromRegex(const string &pattern, size_t &i);
+
+// Handles group patterns: (...) with a|b alternation
+string parseGroup(const string &pattern, size_t &i) {
+    vector<string> options;
+    string current;
+
+    ++i; // Skip '('
+    while (i < pattern.size() && pattern[i] != ')') {
+        if (pattern[i] == '|') {
+            options.push_back(current);
+            current.clear();
+            ++i;
+        } else if (pattern[i] == '(') {
+            current += parseGroup(pattern, i); // Nested group
+        } else {
+            current += pattern[i++];
+        }
+    }
+    ++i; // Skip ')'
+    options.push_back(current); // Add last option
+
+    return options[rand() % options.size()]; // Random choice
 }
 
-// Function to generate a random string based on specific patterns
-string generateStringFromPattern(const string &pattern)
-{
+// Parses and generates string from regex-like pattern
+string generateFromRegex(const string &pattern, size_t &i) {
     string result;
+    string lastToken;
 
-    // Handle specific parts of the regex
-    if (pattern == "(a|b)(c|d)E+G?")
-    {
-        // First part (a|b)
-        result += getRandomChoice({"a", "b"});
-        // Second part (c|d)
-        result += getRandomChoice({"c", "d"});
-        // E+ (E at least once, so we add one 'E' and can add more)
-        result += "E"; // E must be present
-        for (int i = 0; i < rand() % MAX_REPETITIONS; ++i)
-        {
-            // Add 0-MAX_REPETITIONS more Es
-            result += "E";
-        }
-        // G? (G is optional, can appear 0 or 1 time)
-        if (rand() % 2)
-        {
-            result += "G";
+    while (i < pattern.size()) {
+        char c = pattern[i];
+
+        if (c == '(') {
+            string group = parseGroup(pattern, i);
+            result += group;
+            lastToken = group;
+        } else if (c == '|') {
+            ++i; // Skip, handled in parseGroup
+        } else if (c == '*') {
+            int reps = rand() % MAX_REPETITIONS;
+            for (int j = 0; j < reps; ++j) result += lastToken;
+            ++i;
+        } else if (c == '+') {
+            int reps = 1 + rand() % MAX_REPETITIONS;
+            for (int j = 1; j < reps; ++j) result += lastToken;
+            ++i;
+        } else if (c == '?') {
+            if (rand() % 2 == 0) result.erase(result.size() - lastToken.size());
+            ++i;
+        } else if (c == '^') {
+            ++i;
+            if (i < pattern.size() && pattern[i] == '*') {
+                ++i;
+                int reps = rand() % MAX_REPETITIONS;
+                for (int j = 0; j < reps; ++j) result += lastToken;
+            } else {
+                int count = 0;
+                while (i < pattern.size() && isdigit(pattern[i])) {
+                    count = count * 10 + (pattern[i] - '0');
+                    ++i;
+                }
+                for (int j = 1; j < count; ++j) result += lastToken; // ^N includes 1 original + N-1 more
+            }
+        } else if (c == ' ') {
+            ++i; // Ignore spaces
+        } else {
+            result += c;
+            lastToken = string(1, c);
+            ++i;
         }
     }
-    else if (pattern == "P(Q|R|S)T(UV|W|X)*Z+")
-    {
-        // P(Q|R|S)
-        result += "P" + getRandomChoice({"Q", "R", "S"});
 
-        // T(UV|W|X)*
-        result += "T";
-        string choice = getRandomChoice({"UV", "W", "X"});
-        int repetitions = rand() % MAX_REPETITIONS; // Repeat 0-MAX_REPETITIONS times
-        for (int i = 0; i < repetitions; ++i)
-        {
-            result += choice; // Append the same choice each time
-        }
-
-        // Z+ (Z at least once)
-        result += "Z";
-        for (int i = 0; i < rand() % MAX_REPETITIONS; ++i)
-        {
-            // Add 0-MAX_REPETITIONS more Zs
-            result += "Z";
-        }
-    }
-
-    else if (pattern == "1(0/1)*2(3/4)^5 36")
-    {
-        // 1(0/1)*2(3/4)^5
-        result += "1";
-        string choice = getRandomChoice({"0", "1"});
-        for (int i = 0; i < rand() % MAX_REPETITIONS; ++i)
-        {
-            // Repeat the same choice for 0-MAX_REPETITIONS times
-            result += choice;
-        }
-        result += "2";
-        choice = getRandomChoice({"3", "4"});
-        for (int i = 0; i < 5; ++i)
-        {
-            // Repeat the same choice for exactly 5 times (for (3/4)^5)
-            result += choice;
-        }
-        // 36
-        result += "36";
-    }
     return result;
 }
 
-// Function to simulate the construction of strings from a regex pattern
-void buildStringFromRegex(const string &pattern)
-{
-    vector<string> results;
-
-    // Generate 5 random strings based on the pattern
-    for (int i = 0; i < 5; ++i)
-    {
-        string result = generateStringFromPattern(pattern);
-        results.push_back(result);
-    }
-
-    // Display the results with a delay between each string for real-time construction
-    for (const auto &res: results)
-    {
-        for (size_t i = 0; i < res.length(); ++i)
-        {
-            cout << res[i];
-            this_thread::sleep_for(chrono::milliseconds(SLEEP)); // Delay of 100ms between characters
+// Generates and prints N_STRINGS strings from a pattern
+void buildFromPattern(const string &pattern) {
+    for (int i = 0; i < N_STRINGS; ++i) {
+        size_t index = 0;
+        string result = generateFromRegex(pattern, index);
+        for (char c : result) {
+            cout << c;
+            this_thread::sleep_for(chrono::milliseconds(SLEEP));
         }
         cout << endl;
     }
 }
 
-int main()
-{
-    srand(time(0)); // Seed for random generation
+int main() {
+    srand(time(0)); // Seed randomness
 
-    // Regular expressions as input
     vector<string> regexPatterns = {
         "(a|b)(c|d)E+G?",
         "P(Q|R|S)T(UV|W|X)*Z+",
-        "1(0/1)*2(3/4)^5 36"
+        "1(0|1)*2(3|4)^5 36",
+        // "(Ha|He|Ho)^* (wo|wa)^3 !+(x|y|z)?"
     };
 
-    // Process each pattern dynamically
-    for (const string &pattern: regexPatterns)
-    {
-        cout << "Building string for pattern: " << pattern << endl;
-        buildStringFromRegex(pattern);
+    for (const string &pattern : regexPatterns) {
+        cout << "Generated strings for: " << pattern << endl;
+        buildFromPattern(pattern);
     }
 
     return 0;
