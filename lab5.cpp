@@ -26,64 +26,78 @@ public:
         return result;
     }
 
-    void eliminateEpsilon() {
-    set<string> nullable;
+    void eliminateEpsilon()
+    {
+        set<string> nullable;
+        set<string> fullyNullable;
 
-    // Step 1: Find nullable non-terminals
-    for (auto &nonTerminal : nonTerminals) {
-        for (auto &prod : productions[nonTerminal]) {
-            if (prod == "ε") {
-                nullable.insert(nonTerminal);
+        // Step 1: Find nullable non-terminals (those that produce ε directly)
+        for (const auto &[nt, prods]: productions)
+        {
+            if (prods.count("ε"))
+            {
+                nullable.insert(nt);
             }
         }
-    }
 
-    // Step 2: Remove epsilon productions (C -> ε)
-    for (auto &nonTerminal : nonTerminals) {
-        for (auto &prod : productions[nonTerminal]) {
-            if (prod == "ε") {
-                productions[nonTerminal].erase(prod);
+        // Identify fully nullable non-terminals (only ε as production)
+        for (const string &nt: nullable)
+        {
+            if (productions[nt].size() == 1 && productions[nt].count("ε"))
+            {
+                fullyNullable.insert(nt);
             }
         }
-    }
 
-    // Step 3: Completely remove nullable non-terminals from all productions
-    map<string, set<string>> newProductions;
+        // Step 2: Remove ε productions (we'll handle replacements in step 3)
+        for (auto &[nt, prods]: productions)
+        {
+            prods.erase("ε");
+        }
 
-    for (auto &nonTerminal : nonTerminals) {
-        set<string> updatedProds;  // Set to store the updated productions for this non-terminal
-        for (auto &prod : productions[nonTerminal]) {
-            // Tokenize production into parts and remove any nullable non-terminals
-            vector<string> prodParts = tokenize(prod);
-            string updatedProd = "";
-            for (const auto &part : prodParts) {
-                // Only add the part if it's not a nullable non-terminal
-                if (nullable.find(part) == nullable.end()) {
-                    updatedProd += part;
+        // Step 3: For each production, generate new forms by omitting nullable symbols
+        map<string, set<string> > newProductions;
+
+        for (const auto &[nt, prods]: productions)
+        {
+            for (const string &prod: prods)
+            {
+                vector<string> parts = tokenize(prod);
+                int n = parts.size();
+
+                // Remove fully nullable symbols entirely
+                vector<string> filtered;
+                for (const string &p: parts)
+                {
+                    if (!fullyNullable.count(p))
+                        filtered.push_back(p);
+                }
+
+                if (filtered.empty())
+                    continue;
+
+                // Generate all subsets by optionally removing other nullable symbols
+                int total = 1 << filtered.size();
+                for (int mask = 0; mask < total; ++mask)
+                {
+                    vector<string> newParts;
+                    for (int i = 0; i < filtered.size(); ++i)
+                    {
+                        if (!(mask & (1 << i)) || nullable.count(filtered[i]) == 0)
+                        {
+                            newParts.push_back(filtered[i]);
+                        }
+                    }
+                    if (!newParts.empty())
+                    {
+                        newProductions[nt].insert(join(newParts, ""));
+                    }
                 }
             }
-
-            // If the production is non-empty, add it to the set of updated productions
-            if (!updatedProd.empty()) {
-                updatedProds.insert(updatedProd);
-            }
         }
 
-        // Store the updated productions in the new production set
-        newProductions[nonTerminal] = updatedProds;
+        productions = newProductions;
     }
-
-    // Step 4: Remove nullable non-terminals from the grammar
-    for (const auto& nonTerminal : nullable) {
-        nonTerminals.erase(nonTerminal);  // Remove nullable non-terminal
-        newProductions.erase(nonTerminal);  // Remove its productions
-    }
-
-    // Update the productions after removing nullable non-terminals
-    productions = newProductions;
-}
-
-
 
     // Method to eliminate unit productions
     void eliminateUnitProductions()
@@ -256,60 +270,169 @@ public:
         return ss.str();
     }
 
-    void toCNF() {
-    eliminateEpsilon();
-    eliminateUnitProductions();
-    eliminateInaccessibleSymbols();
-    eliminateNonProductiveSymbols();
-
-    map<string, set<string>> updatedProductions;
-    map<string, string> terminalToNonTerminal;
-    int varCounter = 1;
-
-    // Step 1: Replace terminals inside longer rules
-    for (auto& [lhs, rhsSet] : productions) {
-        for (string rule : rhsSet) {
-            vector<string> parts = tokenize(rule);
-
-            // Step 1.1: Replace terminals in longer rules with non-terminals
-            for (int i = 0; i < parts.size(); ++i) {
-                string symbol = parts[i];
-                if (terminals.count(symbol) && parts.size() > 1) {
-                    // Create a non-terminal for this terminal if it doesn't exist yet
-                    if (!terminalToNonTerminal.count(symbol)) {
-                        string tempNT = "T_" + symbol;
-                        terminalToNonTerminal[symbol] = tempNT;
-                        nonTerminals.insert(tempNT);
-                        updatedProductions[tempNT].insert(symbol);  // T_a -> a
-                    }
-                    parts[i] = terminalToNonTerminal[symbol];  // Replace terminal with its non-terminal
-                }
-            }
-
-            // Step 2: Convert to binary productions if necessary
-            if (parts.size() == 1) {
-                updatedProductions[lhs].insert(parts[0]);
-            } else if (parts.size() == 2) {
-                updatedProductions[lhs].insert(join(parts, " "));
-            } else {
-                // Convert long productions into binary form
-                string prev = lhs;
-                for (size_t i = 0; i < parts.size() - 2; ++i) {
-                    string newNT = "X" + to_string(varCounter++);
-                    updatedProductions[prev].insert(parts[i] + " " + newNT);
-                    nonTerminals.insert(newNT);
-                    prev = newNT;
-                }
-                updatedProductions[prev].insert(parts[parts.size() - 2] + " " + parts[parts.size() - 1]);
+    void printGrammar(const map<string, set<string> > &prods)
+    {
+        cout << "\nCurrent Grammar:\n";
+        for (const auto &[lhs, rhsSet]: prods)
+        {
+            for (const string &rhs: rhsSet)
+            {
+                cout << lhs << " -> " << rhs << endl;
             }
         }
     }
 
-    // Assign the updated productions back to the main production map
-    productions = updatedProductions;
+    void toCNF() {
+    cout << "Original Grammar:";
+    printGrammar(productions);
+
+    eliminateEpsilon();
+    cout << "\nAfter eliminateEpsilon:";
+    printGrammar(productions);
+
+    eliminateUnitProductions();
+    cout << "\nAfter eliminateUnitProductions:";
+    printGrammar(productions);
+
+    eliminateInaccessibleSymbols();
+    cout << "\nAfter eliminateInaccessibleSymbols:";
+    printGrammar(productions);
+
+    eliminateNonProductiveSymbols();
+    cout << "\nAfter eliminateNonProductiveSymbols:";
+    printGrammar(productions);
+
+    // Create terminal-to-nonterminal mappings and add productions
+    map<string, string> terminalToNonTerminal;
+    for (const auto& terminal : terminals) {
+        string newNT = "T_" + terminal;
+        terminalToNonTerminal[terminal] = newNT;
+        nonTerminals.insert(newNT);
+    }
+
+    // Map to store patterns of right-hand sides to avoid duplicate X variables
+    map<string, string> patternToVar;
+    int varCounter = 0;
+
+    // Create a new set of productions in CNF
+    map<string, set<string>> cnfProductions;
+
+    // First, add the terminal productions
+    for (const auto& [terminal, nt] : terminalToNonTerminal) {
+        cnfProductions[nt].insert(terminal);
+    }
+
+    // Process each original production
+    for (const auto& [lhs, rhsSet] : productions) {
+        for (const auto& rhs : rhsSet) {
+            vector<string> symbols = tokenize(rhs);
+
+            // Case 1: A -> a (single terminal)
+            if (symbols.size() == 1 && terminals.count(symbols[0])) {
+                cnfProductions[lhs].insert(terminalToNonTerminal[symbols[0]]);
+                continue;
+            }
+
+            // Case 2: A -> B (single non-terminal)
+            if (symbols.size() == 1 && nonTerminals.count(symbols[0])) {
+                // This will be handled in the unit production elimination
+                cnfProductions[lhs].insert(symbols[0]);
+                continue;
+            }
+
+            // Case 3: Replace terminals with their non-terminals
+            for (size_t i = 0; i < symbols.size(); ++i) {
+                if (terminals.count(symbols[i])) {
+                    symbols[i] = terminalToNonTerminal[symbols[i]];
+                }
+            }
+
+            // Case 4: A -> BC (already in correct form)
+            if (symbols.size() == 2) {
+                cnfProductions[lhs].insert(symbols[0] + " " + symbols[1]);
+                continue;
+            }
+
+            // Case 5: A -> BCD... (need to introduce new non-terminals)
+            if (symbols.size() > 2) {
+                string currentLHS = lhs;
+                vector<string> currentRHS = symbols;
+
+                while (currentRHS.size() > 2) {
+                    // Take first two symbols
+                    vector<string> firstTwo = {currentRHS[0], currentRHS[1]};
+                    string firstTwoStr = firstTwo[0] + " " + firstTwo[1];
+                    string newNT;
+
+                    // Check if we've seen this pattern before
+                    if (patternToVar.count(firstTwoStr)) {
+                        newNT = patternToVar[firstTwoStr];
+                    } else {
+                        newNT = "X" + to_string(varCounter++);
+                        nonTerminals.insert(newNT);
+                        patternToVar[firstTwoStr] = newNT;
+                        cnfProductions[newNT].insert(firstTwoStr);
+                    }
+
+                    // Update current RHS: remove first two, insert new NT at beginning
+                    currentRHS.erase(currentRHS.begin(), currentRHS.begin() + 2);
+                    currentRHS.insert(currentRHS.begin(), newNT);
+                }
+
+                // After the loop, currentRHS should have exactly 2 symbols
+                cnfProductions[currentLHS].insert(currentRHS[0] + " " + currentRHS[1]);
+            }
+        }
+    }
+
+    // Handle any remaining unit productions
+    map<string, set<string>> finalProductions = cnfProductions;
+    bool changed;
+
+    do {
+        changed = false;
+        map<string, set<string>> tempProductions = finalProductions;
+
+        for (const auto& [lhs, rhsSet] : finalProductions) {
+            for (const string& rhs : rhsSet) {
+                vector<string> parts = tokenize(rhs);
+
+                if (parts.size() == 1 && nonTerminals.count(parts[0])) {
+                    // This is a unit production A -> B
+                    if (finalProductions.count(parts[0])) {
+                        for (const string& replacement : finalProductions[parts[0]]) {
+                            vector<string> replacementParts = tokenize(replacement);
+
+                            // Only add if it's not another unit production
+                            if (replacementParts.size() != 1 || !nonTerminals.count(replacementParts[0])) {
+                                if (tempProductions[lhs].insert(replacement).second) {
+                                    changed = true;
+                                }
+                            }
+                        }
+                    }
+
+                    // Remove the unit production
+                    tempProductions[lhs].erase(rhs);
+                    if (tempProductions[lhs].empty()) {
+                        tempProductions.erase(lhs);
+                    }
+                    changed = true;
+                }
+            }
+        }
+
+        if (changed) {
+            finalProductions = tempProductions;
+        }
+    } while (changed);
+
+    // Update the original productions with our CNF productions
+    productions = finalProductions;
+
+    cout << "\nFinal CNF Grammar:";
+    printGrammar(productions);
 }
-
-
 
     void printGrammar()
     {
@@ -345,15 +468,22 @@ int main()
     };
     string startSymbol = "S";
 
+    // set<string> nonTerminals = {"S", "A", "B", "C", "E"};
+    // set<string> terminals = {"a", "b"};
+    // map<string, set<string> > productions = {
+    //     {"S", {"bA", "B"}},
+    //     {"A", {"a", "aS", "bAaAb"}},
+    //     {"B", {"AC", "bS", "aAa"}},
+    //     {"C", {"ε", "AB"}},
+    //     {"E", {"BA"}}
+    // };
+    // string startSymbol = "S";
 
     // Create a Grammar object
     Grammar grammar(nonTerminals, terminals, productions, startSymbol);
 
     // Convert the grammar to CNF
     grammar.toCNF();
-
-    // Print the resulting CNF grammar
-    grammar.printGrammar();
 
     return 0;
 }
